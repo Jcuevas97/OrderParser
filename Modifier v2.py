@@ -1,4 +1,6 @@
+import copy
 import csv
+
 
 class Order:
     def __init__(self, row):
@@ -28,7 +30,7 @@ class Order:
                     self.callput = "P"
                 self.strike = details[5]
                 self.premium = details[7]
-                self.contracts = details[1]
+                self.contracts = int(details[1])
             elif row[1].split(' ')[0] == "Receive":
                 self.ticker = row[1].split(' ')[2]
                 if details[-1] == "expiration.":
@@ -37,7 +39,7 @@ class Order:
                     self.buysell = "expired"
                     self.callput = details[5][0]
                     self.strike = details[6]
-                    self.contracts = details[2]
+                    self.contracts = int(details[2])
                 elif details[-1] == "exercise" or details[-1] == "assignment":
                     self.real = False
                 else:
@@ -50,13 +52,13 @@ class Order:
                         self.buysell = "B"
                         self.callput = "Assigned"
                     self.strike = details[-1]
-                    self.contracts = int(details[3]) / 100
+                    self.contracts = int(int(details[3]) / 100)
         else:
             self.real = False
 
-
     def update(self, o):
-        if (self.expdate == o.expdate) and (self.buysell == o.buysell) and (self.premium == o.premium):
+        if (self.expdate == o.expdate) and (self.buysell == o.buysell) and \
+                (self.premium == o.premium) and (self.cpremium == o.cpremium):
             self.contracts = int(self.contracts) + int(o.contracts)
             self.fee = float(self.fee) + float(o.fee)
             return self
@@ -69,60 +71,69 @@ class Order:
             tempmax = max(self.odate, o.odate)
             if o.odate == tempmax:
                 if self.contracts == o.contracts:
-                    self.fee = float(self.fee) + float(o.fee)
-                    if (self.callput == "Assigned") or (o.callput == "Assigned"):
-                        self.cpremium = -float(o.premium)
-                    elif (self.callput == "Exercised") or (o.callput == "Exercised"):
-                        self.cpremium = -float(o.premium)
-                    else:
-                        self.cpremium = o.premium
-                    self.cdate = tempmax
+                    self.close(o)
                     return self
-                elif self.contracts >= o.contracts:
+                elif self.contracts > o.contracts:
+                    rest = self.split(o.contracts)
                     # split self order in 2 one with o contract amount and second with rest
                     # close first order
                     # return closed order and second order
-                    self.fee = float(self.fee) + float(o.fee)
-                    if (self.callput == "Assigned") or (o.callput == "Assigned"):
-                        self.cpremium = -float(o.premium)
-                    elif (self.callput == "Exercised") or (o.callput == "Exercised"):
-                        self.cpremium = -float(o.premium)
-                    else:
-                        self.cpremium = o.premium
-                    self.cdate = tempmax
-                    return self
-                elif self.contracts >= o.contracts:
+                    self.close(o)
+                    return [self, rest]
+                elif self.contracts < o.contracts:
+                    rest = o.split(self.contracts)
                     # split o order in 2 one with self contract amount and second with rest
                     # close first order
                     # return closed order and second order
-                    self.fee = float(self.fee) + float(o.fee)
-                    if (self.callput == "Assigned") or (o.callput == "Assigned"):
-                        self.cpremium = -float(o.premium)
-                    elif (self.callput == "Exercised") or (o.callput == "Exercised"):
-                        self.cpremium = -float(o.premium)
-                    else:
-                        self.cpremium = o.premium
-                    self.cdate = tempmax
-                    return self
+                    self.close(o)
+                    return [self, rest]
             elif self.odate == tempmax:
                 return o.update(self)
         else:
-            return [self, o]
+            return self
 
+    def split(self, i):
+        splitby = int(self.contracts) - int(i)
+        onefee = float(self.fee)/float(self.contracts)
+        rest = copy.deepcopy(self)\
+            .updatecontracts(splitby)\
+            .updatefee((onefee) * float(splitby))
+        self.updatefee(onefee*i).updatecontracts(i)
+        return rest
+
+    def compare(self, o):
+        return ((self.ticker == o.ticker) and
+                (self.odate == o.odate) and
+                (self.expdate == o.expdate) and
+                (self.callput == o.callput) and
+                (self.buysell == o.buysell) and
+                (self.strike == o.strike) and
+                (self.premium == o.premium) and
+                (self.contracts == o.contracts) and
+                (self.fee == o.fee) and
+                (self.cpremium == o.cpremium) and
+                (self.cdate == o.cdate))
+
+    def updatecontracts(self, u):
+        self.contracts = u
+        return self
+
+    def updatefee(self, u):
+        self.fee = u
+        return self
 
     def tolist(self):
-       return [str(self.ticker)
-              ,str(self.odate)
-              ,str(self.expdate)
-              ,str(self.callput)
-              ,str(self.buysell)
-              ,str(self.strike)
-              ,str(self.premium)
-              ,str(self.contracts)
-              ,str(self.fee)
-              ,str(self.cpremium)
-              ,str(self.cdate)]
-
+        return [str(self.ticker)
+            , str(self.odate)
+            , str(self.expdate)
+            , str(self.callput)
+            , str(self.buysell)
+            , str(self.strike)
+            , str(self.premium)
+            , str(self.contracts)
+            , str(self.fee)
+            , str(self.cpremium)
+            , str(self.cdate)]
 
     def tostring(self):
         print("------------------------------------" +
@@ -138,6 +149,16 @@ class Order:
               "\nClose Price  : " + str(self.cpremium) +
               "\nClose Date: " + str(self.cdate))
 
+    def close(self, o):
+        self.fee = float(self.fee) + float(o.fee)
+        if (self.callput == "Assigned") or (o.callput == "Assigned") or \
+                (self.callput == "Exercised") or (o.callput == "Exercised"):
+            self.cpremium = -float(o.premium)
+        else:
+            self.cpremium = o.premium
+        self.cdate = o.odate
+
+
 def dataorg(file):
     allorders = {}
     data = open(file)
@@ -151,12 +172,26 @@ def dataorg(file):
                 if currentorder.strike in allorders[currentorder.ticker]:
                     ticklist = allorders[currentorder.ticker][currentorder.strike]
                     updatedlist = []
-                    for item in ticklist:
-                        tempcontract = item.update(currentorder)
-                        if not isinstance(tempcontract, Order):
-                            updatedlist += tempcontract
-                        else:
-                            updatedlist += [tempcontract]
+                    for item in reversed(ticklist):
+                        tempitem = copy.deepcopy(item).update(currentorder)
+                        if type(tempitem) is Order:
+                            if tempitem.compare(item) and ticklist[0] == item:
+                                updatedlist += [tempitem, currentorder]
+                                continue
+                            elif not tempitem.compare(item):
+                                if not ticklist[0].compare(item):
+                                    updatedlist = updatedlist + [tempitem] + ticklist[:ticklist.index(item)]
+                                    break
+                            updatedlist += [tempitem]
+                        elif type(tempitem) is list:
+                            if not ticklist[0].compare(item):
+                                # once closed one is closed
+                                # continue checking to see if more contracts can be closed
+
+                                updatedlist = updatedlist + tempitem + ticklist[0:ticklist.index(item)]
+                                break
+                            updatedlist = updatedlist + tempitem
+
                     allorders[currentorder.ticker][currentorder.strike] = updatedlist
                 else:
                     allorders[currentorder.ticker][currentorder.strike] = [currentorder]
@@ -165,7 +200,7 @@ def dataorg(file):
     return allorders
 
 
-def cvsprinter(allorders,name):
+def cvsprinter(allorders, name):
     with open(name, "w", newline='') as f:
         writer = csv.writer(f)
         for key in allorders:
@@ -176,8 +211,9 @@ def cvsprinter(allorders,name):
 
 
 def main():
-    inp = input("Enter file to be parsed")
-    out = input("Enter filename for export")
-    cvsprinter(dataorg(inp), out)
+    inp = "A:\\Programing\\Finance Updater\\Tast3.csv"
+    # out = input("Enter filename for export:   ")
+    cvsprinter(dataorg(inp), "out.csv")
+
 
 main()
