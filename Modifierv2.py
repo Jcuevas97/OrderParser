@@ -68,8 +68,8 @@ class Order:
                                                                                   ((o.callput == "Assigned") or
                                                                                    (o.callput == "Exercised"))):
 
-            tempmax = max(self.odate, o.odate)
-            if o.odate == tempmax:
+            datemax = max(self.odate, o.odate)
+            if o.odate == datemax:
                 if self.contracts == o.contracts:
                     self.close(o)
                     return self
@@ -87,18 +87,18 @@ class Order:
                     # return closed order and second order
                     self.close(o)
                     return [self, rest]
-            elif self.odate == tempmax:
+            elif self.odate == datemax:
                 return o.update(self)
         else:
             return self
 
     def split(self, i):
         splitby = int(self.contracts) - int(i)
-        onefee = float(self.fee)/float(self.contracts)
-        rest = copy.deepcopy(self)\
-            .updatecontracts(splitby)\
-            .updatefee((onefee) * float(splitby))
-        self.updatefee(onefee*i).updatecontracts(i)
+        onefee = float(self.fee) / float(self.contracts)
+        rest = copy.deepcopy(self) \
+            .updatecontracts(splitby) \
+            .updatefee(onefee * float(splitby))
+        self.updatefee(onefee * i).updatecontracts(i)
         return rest
 
     def compare(self, o):
@@ -124,16 +124,16 @@ class Order:
 
     def tolist(self):
         return [str(self.ticker)
-            , str(self.odate)
-            , str(self.expdate)
-            , str(self.callput)
-            , str(self.buysell)
-            , str(self.strike)
-            , str(self.premium)
-            , str(self.contracts)
-            , str(self.fee)
-            , str(self.cpremium)
-            , str(self.cdate)]
+                , str(self.odate)
+                , str(self.expdate)
+                , str(self.callput)
+                , str(self.buysell)
+                , str(self.strike)
+                , str(self.premium)
+                , str(self.contracts)
+                , str(self.fee)
+                , str(self.cpremium)
+                , str(self.cdate)]
 
     def tostring(self):
         print("------------------------------------" +
