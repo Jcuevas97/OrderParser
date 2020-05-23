@@ -354,19 +354,19 @@ def listupdater(ticklist, currentorder):
 
 def Tasty2row(row):
     """
-        Takes a list derived from a single row of Tastywork's Transactions page
-        and returns a list formatted to be passed into the Order constructor
+    Takes a list derived from a single row of Tastywork's Transactions page
+    and returns a list formatted to be passed into the Order constructor
 
-        Parameters
-        ----------
-        row : list
-            list of order information
+    Parameters
+    ----------
+    row : list
+        list of order information
 
-        Returns
-        -------
-        list
-            a list properly formatted for Order constructor
-        """
+    Returns
+    -------
+    list
+        a list properly formatted for Order constructor
+    """
     real = True
     ticker = ""
     cdate = ""
@@ -411,7 +411,7 @@ def Tasty2row(row):
                 strike = details[6]
                 contracts = int(details[2])
             # Tastyworks has multiple entries for exercising/assignment in this case
-            # this entry does not all the information desired to create a order object
+            # this entry does not have all the information desired to create a order object
             elif details[-1] == "exercise" or details[-1] == "assignment":
                 real = False
             else:
@@ -444,19 +444,19 @@ def Tasty2row(row):
 
 def Robin2row(row):
     """
-        Takes a list derived from a single row of Robinhood's Account statements pdf
-        and returns a list formatted to be passed into the Order constructor
+    Takes a list derived from a single row of Robinhood's Account statements pdf
+    and returns a list formatted to be passed into the Order constructor
 
-        Parameters
-        ----------
-        row : list
-            list of order information
+    Parameters
+    ----------
+    row : list
+        list of order information
 
-        Returns
-        -------
-        list
-            a list properly formatted for Order constructor
-        """
+    Returns
+    -------
+    list
+        a list properly formatted for Order constructor
+    """
     real = True
     ticker = ""
     cdate = ""
@@ -473,6 +473,8 @@ def Robin2row(row):
     # stock purchase/assignment/exercise/expiration
     if len(row) == 1 or (row[-1].replace('.', '', 1).isdigit() and len(row) == 2):
         details = row[0].split(" ")
+        # Checks if the row is pending settlement, these trades are not option related
+        # so they are set to false
         if "/" in details[7] and "/" in details[6]:
             real = False
         ticker = details[0]
@@ -482,11 +484,14 @@ def Robin2row(row):
         elif details[2] == "Put":
             callput = "P"
         strike = details[3].strip("$")
+        # When detail[5][0] is not an O then the order is not at expiration
         if details[5][0] != 'O':
             buysell = details[6][0]
             odate = details[7]
             contracts = details[8]
             premium = details[9]
+        # Robinhood has multiple entries for exercising/assignment in this case
+        # this entry does not have all the information desired to create a order object
         elif details[5] == "OASGN" or details[5] == "OEXCS":
             real = False
         elif details[5] == "OEXP":
@@ -498,6 +503,8 @@ def Robin2row(row):
                 buysell = "B"
                 contracts = details[7]
             premium = 0
+    # Robinhood uses the word Unsolicited when stock is purchased or sold this section checks
+    # if they are being purchased or sold due to option assignment or exercise
     elif row[0].split(" ")[-1] == "Unsolicited":
         details = row[1].split(" ")
         if details[5] == "Option":
@@ -537,6 +544,17 @@ def Robin2row(row):
 
 
 def cvsprinter(allorders, name):
+    """
+    Takes a dictionary of orders and a file name, then both
+    prints each of the orders and adds them to the file
+
+    Parameters
+    ----------
+    allorders : dict
+        a nested dictionary where the key is the ticker for the orders with a value of
+        a second dictionary where the key is the strike price for the orders
+
+    """
     with open(name, "w", newline='') as f:
         writer = csv.writer(f)
         for key in allorders:
@@ -547,6 +565,21 @@ def cvsprinter(allorders, name):
 
 
 def orderlister(dic):
+    """
+    Takes a dictionary of orders objects and converts the orders into lists
+    that are then added to another list which is returned
+
+    Parameters
+    ----------
+    dic : dict
+        a nested dictionary where the key is the ticker for the orders with a value of
+        a second dictionary where the key is the strike price for the orders
+
+    Returns
+    -------
+    list
+        a list of orders converted to lists
+    """
     relisted = []
     for key in dic:
         for skey in dic[key]:

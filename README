@@ -1,0 +1,16 @@
+This project was created to simplify my data entry into a google sheet I use to track my option information
+
+This is a template of the sheet I use if you find it useful to use.
+https://docs.google.com/spreadsheets/d/1JUaGIsJCfwKrYiooVAvHu4Lk21ihkHYQhm39msDfHdc/edit?usp=sharing
+
+I created that document as a modification of this sheet that I had found and wanted to use.
+https://docs.google.com/spreadsheets/d/1JJlY3HIy1zwOT36TScrWYORf4HvuKR43VEhSUJS_8Ps/edit?usp=sharing
+
+Currently as of 5/23/2020 only Modifierv3.py has proper functionality.
+The form in which to update the sheet is copying the columns directly into the sheet
+
+in later updates there are various features I will be attempting to implement including but not limited to:
+- automating data insertion into google sheets
+- parsing data directly from robinhood pdfs as apposed to copying the data to a csv first
+- Improving data manipulation to allow for contracts to stack
+- Data extraction directly from the brokerage
