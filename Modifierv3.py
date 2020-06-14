@@ -1,6 +1,7 @@
 import copy
 import csv
-
+import quickstart
+import datetime
 
 class Order:
     """
@@ -56,6 +57,8 @@ class Order:
         Prints order attributes with labels per attribute
     close(o)
         Closes order with the order passed in as an argument
+    merge(o)
+        compares and merges two orders
     """
 
     def __init__(self, row):
@@ -70,13 +73,14 @@ class Order:
         self.expdate = row[2]
         self.callput = row[3]
         self.buysell = row[4]
-        self.strike = row[5]
-        self.premium = row[6]
-        self.contracts = row[7]
-        self.fee = row[8]
-        self.cpremium = row[9]
+        self.strike = float(row[5])
+        self.premium = float(row[6])
+        self.contracts = int(row[7])
+        self.fee = float(row[8])
+        self.cpremium = float(row[9])
         self.cdate = row[10]
-        self.real = row[11]
+        self.broker = row[11]
+        self.real = row[12]
 
     def update(self, o):
         """
@@ -94,13 +98,14 @@ class Order:
             the order being updated
         """
 
-        if (self.expdate == o.expdate) and (self.buysell is not o.buysell) and ((self.callput == o.callput) or
-                                                                                ((self.callput == "Assigned") or
-                                                                                 (self.callput == "Exercised")) or
-                                                                                ((o.callput == "Assigned") or
-                                                                                 (o.callput == "Exercised"))):
+        if (self.broker == o.broker) and (self.expdate == o.expdate) and (self.buysell is not o.buysell) \
+                and ((self.callput == o.callput) or
+                     ((self.callput == "Assigned") or
+                      (self.callput == "Exercised")) or
+                     ((o.callput == "Assigned") or
+                      (o.callput == "Exercised"))):
 
-            datemax = max(self.odate, o.odate)
+            datemax = maxdatefind(self.odate, o.odate)
             if o.odate == datemax:
                 self.close(o)
                 return self
@@ -119,11 +124,11 @@ class Order:
         list
             list of single contract orders
         """
-        if int(self.contracts) == 1:
+        if self.contracts == 1:
             return [self]
         else:
-            splitby = int(self.contracts)
-            onefee = float(self.fee) / float(self.contracts)
+            splitby = self.contracts
+            onefee = self.fee / self.contracts
             self.updatefee(onefee).updatecontracts(1)
             splits = []
             for i in range(splitby):
@@ -152,10 +157,9 @@ class Order:
                 (self.buysell == o.buysell) and
                 (self.strike == o.strike) and
                 (self.premium == o.premium) and
-                (self.contracts == o.contracts) and
-                (self.fee == o.fee) and
                 (self.cpremium == o.cpremium) and
-                (self.cdate == o.cdate))
+                (self.cdate == o.cdate) and
+                (self.broker == o.broker))
 
     def isclosed(self):
         """
@@ -221,7 +225,8 @@ class Order:
             , str(self.contracts)
             , str(self.fee)
             , str(self.cpremium)
-            , str(self.cdate)]
+            , str(self.cdate)
+            , self.broker]
 
     def tostring(self):
         """
@@ -229,17 +234,18 @@ class Order:
 
         """
         print("------------------------------------" +
+              "\nBroker:    " + self.broker +
               "\nTicker:    " + self.ticker +
               "\nOpen Date: " + self.odate +
               "\nExp. Date: " + self.expdate +
               "\nCall/Put : " + self.callput +
               "\nBuy/Sell : " + self.buysell +
               "\nStrike   : " + self.strike +
-              "\nPremium  : " + self.premium +
+              "\nPremium  : " + str(self.premium) +
               "\nContracts: " + str(self.contracts) +
               "\nFee      : " + str(self.fee) +
               "\nClose Price  : " + str(self.cpremium) +
-              "\nClose Date: " + str(self.cdate))
+              "\nClose Date: " + self.cdate)
 
     def close(self, o):
         """
@@ -259,8 +265,29 @@ class Order:
             self.cpremium = o.premium
         self.cdate = o.odate
 
+    def merge(self, o):
+        """
+        Merges an order with the order passed in as an argument
 
-def dataorg(file, service):
+        Parameters
+        ----------
+        o : Order
+            Order object
+
+        """
+
+        self.contracts += o.contracts
+        self.fee += o.fee
+
+
+def maxdatefind(s, o):
+    ss = s.split('/')
+    os = o.split('/')
+    date1 = datetime.date(int(ss[2]), int(ss[0]), int(ss[1]))
+    date2 = datetime.date(int(os[2]), int(os[0]), int(os[1]))
+    return s if date1 >= date2 else o
+
+def dataorg(file, service, sheet=False):
     """
     Takes a file and service and creates a dictionary containing all order information
 
@@ -272,6 +299,7 @@ def dataorg(file, service):
         A char used to represent where the order data was sourced from
         eg - T is Tastyworks
              R is Robinhood
+             G is Google Sheet
 
     Returns
     -------
@@ -281,13 +309,22 @@ def dataorg(file, service):
     """
 
     allorders = {}
-    data = open(file)
-    csv_data = csv.reader(data)
-    for row in csv_data:
+    if service == "T" or service == "R":
+        data = open(file)
+        data_in = csv.reader(data)
+    elif service == "G":
+        data_in = file
+    if sheet != False:
+        allorders = dataorg(quickstart.GetOpenOrders(), "G")
+
+    for row in data_in:
+
         if service == "T":
             currentorder = Order(Tasty2row(row))
         elif service == "R":
             currentorder = Order(Robin2row(row))
+        elif service == "G":
+            currentorder = Order(Sheet2row(row))
         if not currentorder.real:
             continue
         else:
@@ -297,15 +334,15 @@ def dataorg(file, service):
                     ticklist = allorders[currentorder.ticker][currentorder.strike]
                     updatedlist = []
                     if int(currentorder.contracts) == 1:
-                        updatedlist = listupdater(ticklist, currentorder)
+                        updatedlist = listcloser(ticklist, currentorder)
                     else:
                         multiorders = currentorder.split()
                         i = 0
                         for orders in multiorders:
                             if i != 0:
-                                updatedlist = listupdater(updatedlist, orders)
+                                updatedlist = listcloser(updatedlist, orders)
                             else:
-                                updatedlist = listupdater(ticklist, orders)
+                                updatedlist = listcloser(ticklist, orders)
                                 i += 1
                     allorders[currentorder.ticker][currentorder.strike] = updatedlist
                 else:
@@ -317,7 +354,7 @@ def dataorg(file, service):
     return allorders
 
 
-def listupdater(ticklist, currentorder):
+def listcloser(ticklist, currentorder):
     """
     Takes a list of orders and a order and checks if the order can close any
     of the orders in the list. If it can it will close that order and return
@@ -370,19 +407,19 @@ def Tasty2row(row):
     real = True
     ticker = ""
     cdate = ""
-    cpremium = ""
+    cpremium = 0.00
     expdate = ""
     callput = ""
     buysell = ""
-    strike = ""
-    premium = ""
-    contracts = ""
-    fee = ""
+    strike = 0.00
+    premium = 0.00
+    contracts = 0
+    fee = 0.00
     odate = ""
     # if money movement is the second item in row then the row is not an order
     if row[1] != "Money Movement":
         details = row[2].split(' ')
-        odate = row[0]
+        odate = row[0].split(' ', 1)[0]
         fee = row[4].strip('$')
         # if the first word in the second item is trade then it is a normal order
         if row[1].split(' ')[0] == "Trade":
@@ -428,17 +465,18 @@ def Tasty2row(row):
     else:
         real = False
 
-    return [str(ticker)
-        , str(odate)
-        , str(expdate)
-        , str(callput)
-        , str(buysell)
-        , str(strike)
-        , str(premium)
-        , str(contracts)
-        , str(fee)
-        , str(cpremium)
-        , str(cdate)
+    return [ticker
+        , odate
+        , expdate
+        , callput
+        , buysell
+        , strike
+        , premium
+        , contracts
+        , fee
+        , cpremium
+        , cdate
+        , "TastyTrade"
         , real]
 
 
@@ -460,14 +498,14 @@ def Robin2row(row):
     real = True
     ticker = ""
     cdate = ""
-    cpremium = ""
+    cpremium = 0.00
     expdate = ""
     callput = ""
     buysell = ""
-    strike = ""
-    premium = ""
-    contracts = ""
-    fee = 0
+    strike = 0.00
+    premium = 0.00
+    contracts = 0
+    fee = 0.00
     odate = ""
     # checks if the row is an regular order or if it's a
     # stock purchase/assignment/exercise/expiration
@@ -489,7 +527,7 @@ def Robin2row(row):
             buysell = details[6][0]
             odate = details[7]
             contracts = details[8]
-            premium = details[9]
+            premium = details[9].strip("$")
         # Robinhood has multiple entries for exercising/assignment in this case
         # this entry does not have all the information desired to create a order object
         elif details[5] == "OASGN" or details[5] == "OEXCS":
@@ -529,18 +567,26 @@ def Robin2row(row):
     else:
         real = False
 
-    return [str(ticker)
-        , str(odate)
-        , str(expdate)
-        , str(callput)
-        , str(buysell)
-        , str(strike)
-        , str(premium)
-        , str(contracts)
-        , str(fee)
-        , str(cpremium)
-        , str(cdate)
+    return [ticker
+        , odate
+        , expdate
+        , callput
+        , buysell
+        , strike
+        , premium
+        , contracts
+        , fee
+        , cpremium
+        , cdate
+        , "Robinhood"
         , real]
+
+
+def Sheet2row(row):
+    rerow = row[0:5] + row[10:13] + row[15:18] + [row[23]] + [True]
+    if rerow[9] == "":
+        rerow[9] = 0.00
+    return rerow
 
 
 def cvsprinter(allorders, name):
@@ -562,6 +608,25 @@ def cvsprinter(allorders, name):
                 for item in allorders[key][skey]:
                     print(item.tolist())
                     writer.writerow(item.tolist())
+
+
+def ordercondenser(allorders):
+    for ticker in allorders:
+        for strike in allorders[ticker]:
+            orders = allorders[ticker][strike]
+            neworders = []
+            if len(orders) == 1:
+                continue
+            else:
+                while len(orders) != 0:
+                    current = orders.pop()
+                    for i in reversed(orders):
+                        if current.compare(i):
+                            current.merge(i)
+                            orders.remove(i)
+                    neworders += [current]
+            allorders[ticker][strike] = neworders
+    return allorders
 
 
 def orderlister(dic):
@@ -589,7 +654,7 @@ def orderlister(dic):
 
 
 if __name__ == '__main__':
-    inp = "A:\\Programing\\Finance Updater\\Robin Unformatted.csv"
+    inp = "C:\\Users\\johnn\\Desktop\\Finance Updater\\MoreTaste.csv"
     # inp = "A:\\Programing\\Finance Updater\\Tests\\RTest 5.csv"
     # out = input("Enter filename for export:   ")
-    cvsprinter(dataorg(inp, "R"), "outR.csv")
+    cvsprinter(ordercondenser(dataorg(inp, "T", False)), "outT.csv")
